@@ -1,0 +1,21 @@
+[project]
+name = "fde-training"
+version = "0.1.0"
+description = "FDE AI Engineer FastAPI backend"
+readme = "README.md"
+authors = [
+    { name = "FDE AI Engineer"}
+]
+requires-python = ">=3.15"
+dependencies = [
+    "fastapi>=0.165.0",
+    "pydantic>=2.14.4",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+fde-training = "fde_training:main"
+
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14.0"]
+build-backend = "uv_build"
