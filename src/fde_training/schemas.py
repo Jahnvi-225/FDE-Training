@@ -4,16 +4,16 @@ from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., example="Explain quantum computing in two sentences.")
+    message: str = Field(..., examples=["Explain quantum computing in two sentences."])
     model: Optional[str] = Field(
         None,
         description="Optional model override. If omitted, uses the hardcoded server model.",
-        example="gpt-4o-mini",
+        examples=["gpt-4o-mini"],
     )
     system_prompt: Optional[str] = Field(
         None,
         description="Optional system prompt to steer the assistant's behavior.",
-        example="You are a helpful and concise AI assistant.",
+        examples=["You are a helpful and concise AI assistant."],
     )
     max_tokens: Optional[int] = Field(
         1024,

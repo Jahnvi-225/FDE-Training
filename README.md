@@ -91,6 +91,11 @@ Or using the registered CLI shortcut:
 uv run fde-training
 ```
 
+### 4. Run Unit Tests
+```powershell
+uv run pytest
+```
+
 ---
 
 ## Configuration & Hardcoded Models

@@ -39,9 +39,9 @@ logger = logging.getLogger("fde_training")
 
 
 class HealthResponse(BaseModel):
-    status: str = Field(..., example="healthy")
-    service: str = Field(..., example="fde-training")
-    version: str = Field(..., example="0.1.0")
+    status: str = Field(..., examples=["healthy"])
+    service: str = Field(..., examples=["fde-training"])
+    version: str = Field(..., examples=["0.1.0"])
     timestamp: datetime = Field(...)
 
 
