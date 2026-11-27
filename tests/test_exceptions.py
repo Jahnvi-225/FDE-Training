@@ -1,7 +1,5 @@
-import pytest
-from fde_training.exceptions import (
+from app.exceptions import (
     LLMServiceException,
-    SpendingLimitExceededException,
     LLMTimeoutException,
     AuthenticationException,
     UnsupportedModelException,
@@ -14,13 +12,6 @@ def test_base_exception_defaults():
     assert exc.message == "General error"
     assert exc.status_code == 500
     assert exc.error_type == "llm_error"
-
-
-def test_spending_limit_exception():
-    exc = SpendingLimitExceededException("Budget cap hit")
-    assert exc.status_code == 429
-    assert exc.error_type == "spending_limit_exceeded"
-    assert "Budget cap hit" in exc.message
 
 
 def test_timeout_exception():

@@ -7,12 +7,6 @@ class LLMServiceException(Exception):
         self.error_type = error_type
 
 
-class SpendingLimitExceededException(LLMServiceException):
-    """Raised when request or cumulative cost exceeds the configured spending limit."""
-    def __init__(self, message: str = "Spending limit exceeded."):
-        super().__init__(message, status_code=429, error_type="spending_limit_exceeded")
-
-
 class LLMTimeoutException(LLMServiceException):
     """Raised when an LLM provider call exceeds the configured timeout."""
     def __init__(self, message: str = "Request to LLM provider timed out."):

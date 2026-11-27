@@ -7,24 +7,22 @@ import anthropic
 import groq
 import openai
 
-from fde_training.budget import spending_tracker
-
-logger = logging.getLogger("fde_training.llm")
-from fde_training.config import (
+from app.config import (
     ANTHROPIC_API_KEY,
     GROQ_API_KEY,
     HARDCODED_MODEL,
     OPENAI_API_KEY,
     REQUEST_TIMEOUT_SECONDS,
 )
-from fde_training.exceptions import (
+from app.exceptions import (
     AuthenticationException,
     LLMTimeoutException,
     ProviderAPIException,
     UnsupportedModelException,
 )
-from fde_training.pricing import calculate_cost
-from fde_training.schemas import ChatResponse, TokenUsage
+from app.schemas import ChatResponse, TokenUsage
+
+logger = logging.getLogger("app.llm")
 
 
 class LLMService:
@@ -52,20 +50,15 @@ class LLMService:
         max_tokens: int = 1024,
         temperature: float = 0.7,
     ) -> ChatResponse:
-        """Call the appropriate LLM provider, enforcing timeouts and spending limits."""
-        # 1. Use hardcoded server model if none provided in request
+        """Call the appropriate LLM provider, enforcing timeouts and logging metrics."""
         selected_model = model.strip() if model else HARDCODED_MODEL
         provider = cls.resolve_provider(selected_model)
-
-        # 2. Check that the budget limit has not been exceeded before calling
-        await spending_tracker.check_budget_available(estimated_cost=0.0)
 
         logger.info(
             f"[LLM Request Initiated] Provider: {provider.capitalize()} | Model: {selected_model} | MaxTokens: {max_tokens}"
         )
         start_time = time.perf_counter()
 
-        # 3. Execute with provider-specific client wrapped in timeout
         try:
             if provider == "openai":
                 response_text, prompt_tokens, completion_tokens = await asyncio.wait_for(
@@ -105,17 +98,10 @@ class LLMService:
         latency = round(time.perf_counter() - start_time, 3)
         total_tokens = prompt_tokens + completion_tokens
 
-        # 4. Calculate cost and record spending in tracker
-        cost = calculate_cost(selected_model, prompt_tokens, completion_tokens)
-        total_spent = await spending_tracker.record_spending(cost)
-        status = await spending_tracker.get_status()
-
-        # 5. Log latency and token usage metrics
         logger.info(
             f"[LLM Metrics] Provider: {provider.capitalize()} | Model: {selected_model} | "
             f"Latency: {latency:.3f}s ({latency * 1000:.1f}ms) | "
-            f"Tokens: [Prompt: {prompt_tokens}, Completion: {completion_tokens}, Total: {total_tokens}] | "
-            f"Cost: ${cost:.6f} | Total Spent: ${total_spent:.6f} | Remaining: ${status['remaining_budget_usd']:.6f}"
+            f"Tokens: [Prompt: {prompt_tokens}, Completion: {completion_tokens}, Total: {total_tokens}]"
         )
 
         return ChatResponse(
@@ -125,11 +111,8 @@ class LLMService:
             usage=TokenUsage(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
-                total_tokens=prompt_tokens + completion_tokens,
+                total_tokens=total_tokens,
             ),
-            cost_usd=cost,
-            total_spent_usd=total_spent,
-            remaining_budget_usd=status["remaining_budget_usd"],
             latency_seconds=latency,
         )
 
@@ -154,7 +137,6 @@ class LLMService:
 
         try:
             kwargs = {"model": model, "messages": messages}
-            # Reasoning and next-gen models (o1, o3, gpt-6, etc.) require default temperature (1.0)
             if not model.startswith(("o1", "o3", "gpt-6")):
                 kwargs["temperature"] = temperature
             kwargs["max_completion_tokens"] = max_tokens

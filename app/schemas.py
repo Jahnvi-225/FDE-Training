@@ -40,17 +40,7 @@ class ChatResponse(BaseModel):
     model_used: str = Field(..., description="Exact model name used for completion")
     provider: str = Field(..., description="Provider that serviced the request (OpenAI, Anthropic, or Groq)")
     usage: TokenUsage = Field(..., description="Token breakdown for the request")
-    cost_usd: float = Field(..., description="Estimated cost of this request in USD")
-    total_spent_usd: float = Field(..., description="Cumulative cost spent so far in USD")
-    remaining_budget_usd: float = Field(..., description="Remaining spending budget in USD")
     latency_seconds: float = Field(..., description="Duration of the LLM call in seconds")
-
-
-class BudgetStatus(BaseModel):
-    spending_limit_usd: float
-    total_spent_usd: float
-    remaining_budget_usd: float
-    budget_exhausted: bool
 
 
 class ErrorResponse(BaseModel):

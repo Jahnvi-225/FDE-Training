@@ -1,25 +1,14 @@
 from datetime import datetime, timezone
 import logging
+from pathlib import Path
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 import uvicorn
 
-from fde_training.budget import spending_tracker
-from fde_training.config import (
-    HARDCODED_MODEL,
-    REQUEST_TIMEOUT_SECONDS,
-    SPENDING_LIMIT_USD,
-)
-from fde_training.exceptions import LLMServiceException
-from fde_training.schemas import (
-    BudgetStatus,
-    ChatRequest,
-    ChatResponse,
-    ErrorResponse,
-)
-from pydantic import BaseModel, Field
-
-from pathlib import Path
+from app.exceptions import LLMServiceException
+from app.schemas import ChatRequest, ChatResponse, ErrorResponse
+from app.services.llm_service import LLMService
 
 # Setup logging: log both to console (stdout) and persistent logs/app.log file
 log_dir = Path("logs")
@@ -35,7 +24,7 @@ logging.basicConfig(
         logging.FileHandler(log_file, encoding="utf-8"),
     ],
 )
-logger = logging.getLogger("fde_training")
+logger = logging.getLogger("app")
 
 
 class HealthResponse(BaseModel):
@@ -48,7 +37,7 @@ class HealthResponse(BaseModel):
 app = FastAPI(
     title="FDE Training Multi-Provider LLM API",
     version="0.1.0",
-    description="Production-ready FastAPI service integrating OpenAI, Anthropic, and Groq with spending limits, timeouts, and global error handling.",
+    description="FastAPI service integrating OpenAI, Anthropic, and Groq with timeouts and global error handling.",
 )
 
 
@@ -58,7 +47,7 @@ app = FastAPI(
 
 @app.exception_handler(LLMServiceException)
 async def handle_llm_service_exception(request: Request, exc: LLMServiceException):
-    """Handles all domain-specific LLM exceptions (spending limit, timeout, auth, provider errors)."""
+    """Handles all domain-specific LLM exceptions (timeout, auth, unsupported model, provider errors)."""
     logger.warning(f"Handled LLM exception on {request.url.path}: [{exc.error_type}] {exc.message}")
     error_payload = ErrorResponse(
         error=exc.message,
@@ -89,7 +78,7 @@ async def handle_unhandled_exception(request: Request, exc: Exception):
 
 
 # ==============================================================================
-# CHAT ENDPOINT
+# ENDPOINTS
 # ==============================================================================
 
 @app.post(
@@ -98,18 +87,16 @@ async def handle_unhandled_exception(request: Request, exc: Exception):
     status_code=status.HTTP_200_OK,
     tags=["Chat"],
     summary="Multi-provider LLM chat completion",
-    description="Dispatches prompt to the configured LLM (OpenAI, Anthropic, or Groq) with spending limits and timeouts.",
+    description="Dispatches prompt to the configured LLM (OpenAI, Anthropic, or Groq) with timeouts and logging.",
     responses={
         400: {"model": ErrorResponse, "description": "Unsupported model"},
         401: {"model": ErrorResponse, "description": "Authentication / missing API key"},
-        429: {"model": ErrorResponse, "description": "Spending limit exceeded or rate limit"},
+        429: {"model": ErrorResponse, "description": "Provider rate limit"},
         502: {"model": ErrorResponse, "description": "Downstream provider API error"},
         504: {"model": ErrorResponse, "description": "Provider call timed out"},
     },
 )
 async def chat(request: ChatRequest) -> ChatResponse:
-    from fde_training.services.llm_service import LLMService
-
     return await LLMService.generate(
         message=request.message,
         model=request.model,
@@ -118,49 +105,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
         temperature=request.temperature if request.temperature is not None else 0.7,
     )
 
-
-# ==============================================================================
-# BUDGET & CONFIGURATION ENDPOINTS
-# ==============================================================================
-
-@app.get(
-    "/budget",
-    response_model=BudgetStatus,
-    tags=["Budget & Controls"],
-    summary="Inspect current spending and remaining budget",
-)
-async def get_budget() -> BudgetStatus:
-    status_dict = await spending_tracker.get_status()
-    return BudgetStatus(**status_dict)
-
-
-@app.post(
-    "/budget/reset",
-    tags=["Budget & Controls"],
-    summary="Reset accumulated spending tracker to zero",
-)
-async def reset_budget():
-    await spending_tracker.reset()
-    return {"message": "Spending tracker reset successfully.", "total_spent_usd": 0.0}
-
-
-@app.get(
-    "/config",
-    tags=["General"],
-    summary="Inspect active server configuration",
-)
-async def get_server_config():
-    return {
-        "hardcoded_model": HARDCODED_MODEL,
-        "spending_limit_usd": SPENDING_LIMIT_USD,
-        "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
-        "supported_providers": ["OpenAI", "Anthropic", "Groq"],
-    }
-
-
-# ==============================================================================
-# HEALTH & SYSTEM ENDPOINTS
-# ==============================================================================
 
 @app.get(
     "/health",
@@ -177,11 +121,6 @@ async def health_check() -> HealthResponse:
     )
 
 
-@app.get("/healthz", include_in_schema=False)
-async def healthz():
-    return await health_check()
-
-
 @app.get("/", tags=["General"])
 async def root():
     return {
@@ -189,15 +128,13 @@ async def root():
         "endpoints": {
             "chat": "POST /chat",
             "health": "GET /health",
-            "budget": "GET /budget",
-            "config": "GET /config",
             "docs": "GET /docs",
         },
     }
 
 
 def start():
-    uvicorn.run("fde_training.main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from fde_training.main import app, start
+from app.main import app, start
 
 
 def main() -> None:
